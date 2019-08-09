@@ -45,7 +45,7 @@ set -x
 
 go build \
     -gcflags "all=-N -l" \
-    -ldflags "-s \
+    -ldflags "\
         -X ${PKG}/version.RELEASE=${TAG} \
         -X ${PKG}/version.COMMIT=${GIT_COMMIT} \
         -X ${PKG}/version.REPO=${REPO_INFO}" \
