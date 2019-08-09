@@ -41,9 +41,11 @@ fi
 
 export CGO_ENABLED=0
 
+set -x
+
 go build \
-    ${GOBUILD_FLAGS} \
-    -ldflags "-s -w \
+    -gcflags "all=-N -l" \
+    -ldflags "-s \
         -X ${PKG}/version.RELEASE=${TAG} \
         -X ${PKG}/version.COMMIT=${GIT_COMMIT} \
         -X ${PKG}/version.REPO=${REPO_INFO}" \

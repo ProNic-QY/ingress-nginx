@@ -50,7 +50,7 @@ RUN  setcap    cap_net_bind_service=+ep /usr/sbin/nginx \
 RUN ln -sf /dev/stdout /var/log/nginx/access.log
 RUN ln -sf /dev/stderr /var/log/nginx/error.log
 
-USER www-data
+USER root
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
 

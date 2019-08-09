@@ -49,7 +49,7 @@ KUBECTL_CONTEXT = $(shell kubectl config current-context)
 
 GOBUILD_FLAGS :=
 
-ALL_ARCH = amd64 arm64
+ALL_ARCH = amd64
 
 QEMUVERSION = v3.0.0
 
@@ -105,6 +105,7 @@ container: clean-container .container-$(ARCH)
 	mkdir -p $(TEMP_DIR)/rootfs
 	cp bin/$(ARCH)/nginx-ingress-controller $(TEMP_DIR)/rootfs/nginx-ingress-controller
 	cp bin/$(ARCH)/dbg $(TEMP_DIR)/rootfs/dbg
+	cp /root/go/bin/dlv $(TEMP_DIR)/rootfs/dlv
 	@echo "+ Building container image $(MULTI_ARCH_IMG):$(TAG)"
 	cp -RP ./* $(TEMP_DIR)
 	$(SED_I) "s|BASEIMAGE|$(BASEIMAGE)|g" $(DOCKERFILE)
