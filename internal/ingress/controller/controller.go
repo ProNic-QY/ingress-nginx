@@ -1161,9 +1161,16 @@ func mergeAlternativeBackends(ing *ingress.Ingress, upstreams map[string]*ingres
 		} else {
 
 			merged := false
+			altEqualsPri := false
 
 			for _, loc := range servers[defServerName].Locations {
 				priUps := upstreams[loc.Backend]
+				altEqualsPri = altUps.Name == priUps.Name
+				if altEqualsPri {
+					klog.Warningf("alternative upstream %s for location %s/%s in Ingress %s/%s is primary upstream in Other Ingress!",
+						altUps.Name, servers[defServerName].Hostname, loc.Path, ing.Namespace, ing.Name)
+					break
+				}
 
 				if canMergeBackend(priUps, altUps) {
 					klog.V(2).Infof("matching backend %v found for alternative backend %v",
@@ -1173,7 +1180,7 @@ func mergeAlternativeBackends(ing *ingress.Ingress, upstreams map[string]*ingres
 				}
 			}
 
-			if !merged {
+			if !altEqualsPri && !merged {
 				klog.Warningf("unable to find real backend for alternative backend %v. Deleting.", altUps.Name)
 				delete(upstreams, altUps.Name)
 			}
@@ -1192,6 +1199,7 @@ func mergeAlternativeBackends(ing *ingress.Ingress, upstreams map[string]*ingres
 			}
 
 			merged := false
+			altEqualsPri := false
 
 			server, ok := servers[rule.Host]
 			if !ok {
@@ -1205,6 +1213,12 @@ func mergeAlternativeBackends(ing *ingress.Ingress, upstreams map[string]*ingres
 			// find matching paths
 			for _, loc := range server.Locations {
 				priUps := upstreams[loc.Backend]
+				altEqualsPri = altUps.Name == priUps.Name
+				if altEqualsPri {
+					klog.Warningf("alternative upstream %s for location %s/%s in Ingress %s/%s is primary upstream in Other Ingress!",
+						altUps.Name, server.Hostname, loc.Path, ing.Namespace, ing.Name)
+					break
+				}
 
 				if canMergeBackend(priUps, altUps) && loc.Path == path.Path {
 					klog.V(2).Infof("matching backend %v found for alternative backend %v",
@@ -1214,7 +1228,7 @@ func mergeAlternativeBackends(ing *ingress.Ingress, upstreams map[string]*ingres
 				}
 			}
 
-			if !merged {
+			if !altEqualsPri && !merged {
 				klog.Warningf("unable to find real backend for alternative backend %v. Deleting.", altUps.Name)
 				delete(upstreams, altUps.Name)
 			}

@@ -955,3 +955,545 @@ func fakeX509Cert(dnsNames []string) *x509.Certificate {
 		},
 	}
 }
+
+func TestGetBackendServersNic(t *testing.T) {
+	ctl := newNGINXController(t)
+
+	testCases := []struct {
+		Ingresses []*ingress.Ingress
+		Validate  func(upstreams []*ingress.Backend, servers []*ingress.Server)
+	}{
+		{
+			Ingresses: []*ingress.Ingress{
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Backend: &extensions.IngressBackend{
+								ServiceName: "http-svc-canary",
+								ServicePort: intstr.IntOrString{
+									IntVal: 80,
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: true,
+						},
+					},
+				},
+			},
+			Validate: func(upstreams []*ingress.Backend, servers []*ingress.Server) {
+				if len(servers) != 1 {
+					t.Errorf("servers count should be 1, got %d", len(servers))
+					return
+				}
+
+				s := servers[0]
+				if s.Hostname != "_" {
+					t.Errorf("server hostname should be '_', got '%s'", s.Hostname)
+				}
+				if !s.Locations[0].IsDefBackend {
+					t.Errorf("server location 0 should be default backend")
+				}
+
+				if s.Locations[0].Backend != defUpstreamName {
+					t.Errorf("location backend should be '%s', got '%s'", defUpstreamName, s.Locations[0].Backend)
+				}
+			},
+		},
+		{
+			Ingresses: []*ingress.Ingress{
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Backend: &extensions.IngressBackend{
+								ServiceName: "http-svc-canary",
+								ServicePort: intstr.IntOrString{
+									IntVal: 80,
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: true,
+						},
+					},
+				},
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Backend: &extensions.IngressBackend{
+								ServiceName: "http-svc",
+								ServicePort: intstr.IntOrString{
+									IntVal: 80,
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: false,
+						},
+					},
+				},
+			},
+			Validate: func(upstreams []*ingress.Backend, servers []*ingress.Server) {
+				if len(servers) != 1 {
+					t.Errorf("servers count should be 1, got %d", len(servers))
+					return
+				}
+
+				s := servers[0]
+				if s.Hostname != "_" {
+					t.Errorf("server hostname should be '_', got '%s'", s.Hostname)
+				}
+				if s.Locations[0].IsDefBackend {
+					t.Errorf("server location 0 should not be default backend")
+				}
+
+				if s.Locations[0].Backend != "example-http-svc-80" {
+					t.Errorf("location backend should be 'example-http-svc-80', got '%s'", s.Locations[0].Backend)
+				}
+			},
+		},
+		{
+			Ingresses: []*ingress.Ingress{
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-canary",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: true,
+						},
+					},
+				},
+			},
+			Validate: func(upstreams []*ingress.Backend, servers []*ingress.Server) {
+				if len(servers) != 1 {
+					t.Errorf("servers count should be 1, got %d", len(servers))
+					return
+				}
+
+				s := servers[0]
+				if s.Hostname != "_" {
+					t.Errorf("server hostname should be '_', got '%s'", s.Hostname)
+				}
+				if !s.Locations[0].IsDefBackend {
+					t.Errorf("server location 0 should be default backend")
+				}
+
+				if s.Locations[0].Backend != defUpstreamName {
+					t.Errorf("location backend should be '%s', got '%s'", defUpstreamName, s.Locations[0].Backend)
+				}
+			},
+		},
+		{
+			Ingresses: []*ingress.Ingress{
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: false,
+						},
+					},
+				},
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-canary",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-canary",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: true,
+						},
+					},
+				},
+			},
+			Validate: func(upstreams []*ingress.Backend, servers []*ingress.Server) {
+				if len(servers) != 2 {
+					t.Errorf("servers count should be 2, got %d", len(servers))
+					return
+				}
+
+				s := servers[0]
+				if s.Hostname != "_" {
+					t.Errorf("server hostname should be '_', got '%s'", s.Hostname)
+				}
+				if !s.Locations[0].IsDefBackend {
+					t.Errorf("server location 0 should be default backend")
+				}
+
+				if s.Locations[0].Backend != defUpstreamName {
+					t.Errorf("location backend should be '%s', got '%s'", defUpstreamName, s.Locations[0].Backend)
+				}
+
+				s = servers[1]
+				if s.Hostname != "example.com" {
+					t.Errorf("server hostname should be 'example.com', got '%s'", s.Hostname)
+				}
+
+				if s.Locations[0].Backend != "example-http-svc-80" {
+					t.Errorf("location backend should be 'example-http-svc-80', got '%s'", s.Locations[0].Backend)
+				}
+			},
+		},
+		{
+			Ingresses: []*ingress.Ingress{
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-a",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/a",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-1",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: false,
+						},
+					},
+				},
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-a-canary",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/a",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-2",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: true,
+						},
+					},
+				},
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-b",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/b",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-2",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: false,
+						},
+					},
+				},
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-b-canary",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/b",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-1",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: true,
+						},
+					},
+				},
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-c",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/c",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-1",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: false,
+						},
+					},
+				},
+				{
+					Ingress: extensions.Ingress{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      "example-c-canary",
+							Namespace: "example",
+						},
+						Spec: extensions.IngressSpec{
+							Rules: []extensions.IngressRule{
+								{
+									Host: "example.com",
+									IngressRuleValue: extensions.IngressRuleValue{
+										HTTP: &extensions.HTTPIngressRuleValue{
+											Paths: []extensions.HTTPIngressPath{
+												{
+													Path: "/c",
+													Backend: extensions.IngressBackend{
+														ServiceName: "http-svc-2",
+														ServicePort: intstr.IntOrString{
+															Type:   intstr.Int,
+															IntVal: 80,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					ParsedAnnotations: &annotations.Ingress{
+						Canary: canary.Config{
+							Enabled: true,
+						},
+					},
+				},
+			},
+			Validate: func(upstreams []*ingress.Backend, servers []*ingress.Server) {
+				if len(servers) != 2 {
+					t.Errorf("servers count should be 2, got %d", len(servers))
+					return
+				}
+
+				s := servers[0]
+				if s.Hostname != "_" {
+					t.Errorf("server hostname should be '_', got '%s'", s.Hostname)
+				}
+				if !s.Locations[0].IsDefBackend {
+					t.Errorf("server location 0 should be default backend")
+				}
+
+				if s.Locations[0].Backend != defUpstreamName {
+					t.Errorf("location backend should be '%s', got '%s'", defUpstreamName, s.Locations[0].Backend)
+				}
+
+				s = servers[1]
+				if s.Hostname != "example.com" {
+					t.Errorf("server hostname should be 'example.com', got '%s'", s.Hostname)
+				}
+
+				if s.Locations[0].Backend != "example-http-svc-1-80" || s.Locations[1].Backend != "example-http-svc-1-80" || s.Locations[2].Backend != "example-http-svc-1-80"  {
+					t.Errorf("all location backend should be 'example-http-svc-1-80'")
+				}
+
+				if len(upstreams) != 3 {
+					t.Errorf("upstreams count should be 3, got %d", len(upstreams))
+					return
+				}
+
+				if upstreams[0].Name != "example-http-svc-1-80"  {
+					t.Errorf("example-http-svc-1-80 should be frist upstream, got %s", upstreams[0].Name)
+					return
+				}
+				if upstreams[0].NoServer {
+					t.Errorf("'example-http-svc-1-80' should be primary upstream, got as alternative upstream")
+				}
+				if len(upstreams[0].AlternativeBackends) != 1 || upstreams[0].AlternativeBackends[0] != "example-http-svc-2-80" {
+					t.Errorf("example-http-svc-2-80 should be alternative upstream for 'example-http-svc-1-80'")
+				}
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		upstreams, servers := ctl.getBackendServers(testCase.Ingresses)
+		testCase.Validate(upstreams, servers)
+	}
+}
