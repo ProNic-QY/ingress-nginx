@@ -745,7 +745,6 @@ stream {
         listen                  [::]:{{ $udpServer.Port }} udp;
         {{ end }}
         {{ end }}
-        proxy_responses         {{ $cfg.ProxyStreamResponses }};
         proxy_timeout           {{ $cfg.ProxyStreamTimeout }};
         proxy_pass              upstream_balancer;
     }
