@@ -134,28 +134,22 @@ local function sync_backends()
   end
 end
 
-local function route_to_alternative_balancer(balancer)
-  if not balancer.alternative_backends then
-    return false
-  end
-
-  -- TODO: support traffic shaping for n > 1 alternative backends
-  local backend_name = balancer.alternative_backends[1]
+local function backend_match(backend_name, sharping_by_weight_balancers)
   if not backend_name then
     ngx.log(ngx.ERR, "empty alternative backend")
-    return false
+    return false, nil
   end
 
   local alternative_balancer = balancers[backend_name]
   if not alternative_balancer then
     ngx.log(ngx.ERR, "no alternative balancer for backend: " .. tostring(backend_name))
-    return false
+    return false, nil
   end
 
   local traffic_shaping_policy =  alternative_balancer.traffic_shaping_policy
   if not traffic_shaping_policy then
     ngx.log(ngx.ERR, "traffic shaping policy is not set for balanacer of backend: " .. tostring(backend_name))
-    return false
+    return false, nil
   end
 
   local target_header = util.replace_special_char(traffic_shaping_policy.header, "-", "_")
@@ -163,12 +157,12 @@ local function route_to_alternative_balancer(balancer)
   if header then
     if traffic_shaping_policy.headerValue and #traffic_shaping_policy.headerValue > 0 then
       if traffic_shaping_policy.headerValue == header then
-        return true
+        return true, alternative_balancer
       end
     elseif header == "always" then
-      return true
+      return true, alternative_balancer
     elseif header == "never" then
-      return false
+      return false, nil
     end
   end
 
@@ -176,17 +170,39 @@ local function route_to_alternative_balancer(balancer)
   local cookie = ngx.var["cookie_" .. target_cookie]
   if cookie then
     if cookie == "always" then
-      return true
+      return true, alternative_balancer
     elseif cookie == "never" then
-      return false
+      return false, nil
     end
   end
 
-  if math.random(100) <= traffic_shaping_policy.weight then
-    return true
+  table.insert(sharping_by_weight_balancers, alternative_balancer)
+  return false, nil
+end
+
+local function route_to_alternative_balancer(balancer)
+  if not balancer.alternative_backends then
+    return false, nil
   end
 
-  return false
+  local sharping_by_weight_balancers = {}
+  for _, backend_name in ipairs(balancer.alternative_backends) do
+    local match, alternative_balancer = backend_match(backend_name, sharping_by_weight_balancers)
+    if match then
+      return true, alternative_balancer
+    end
+  end
+
+  local remain_weight = 100
+  for _, alternative_balancer in ipairs(sharping_by_weight_balancers) do
+    if math.random(remain_weight) <= alternative_balancer.traffic_shaping_policy.weight then
+      return true, alternative_balancer
+    else
+      remain_weight = remain_weight - alternative_balancer.traffic_shaping_policy.weight
+    end
+  end
+
+  return false, nil
 end
 
 local function get_balancer()
@@ -197,8 +213,8 @@ local function get_balancer()
     return
   end
 
-  if route_to_alternative_balancer(balancer) then
-    local alternative_balancer = balancers[balancer.alternative_backends[1]]
+  local route_to_alternative, alternative_balancer = route_to_alternative_balancer(balancer)
+  if route_to_alternative then
     return alternative_balancer
   end
 
