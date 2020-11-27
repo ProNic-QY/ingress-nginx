@@ -527,6 +527,9 @@ func (l4b1 *L4Backend) Equal(l4b2 *L4Backend) bool {
 	if l4b1.ProxyProtocol != l4b2.ProxyProtocol {
 		return false
 	}
+	if l4b1.UpperLayerProtocol != l4b2.UpperLayerProtocol {
+		return false
+	}
 
 	return true
 }
