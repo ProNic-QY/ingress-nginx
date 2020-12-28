@@ -869,13 +869,16 @@ func updateStreamConfiguration(TCPEndpoints []ingress.L4Service, UDPEndpoints []
 			service = &apiv1.Service{Spec: ep.Service.Spec}
 		}
 
-		key := fmt.Sprintf("tcp-%v-%v-%v", ep.Backend.Namespace, ep.Backend.Name, ep.Backend.Port.String())
+		key := ep.Backend.NginxUpstreamKey()
 		streams = append(streams, ingress.Backend{
-			Name:           key,
-			Endpoints:      ep.Endpoints,
-			Port:           intstr.FromInt(ep.Port),
-			Service:        service,
-			UpstreamHashBy: ep.Backend.UpstreamHashBy,
+			Name:                 key,
+			Endpoints:            ep.Endpoints,
+			Port:                 intstr.FromInt(ep.Port),
+			Service:              service,
+			UpstreamHashBy:       ep.Backend.UpstreamHashBy,
+			NoServer:             ep.Backend.NoServer,
+			TrafficShapingPolicy: ep.Backend.TrafficShapingPolicy,
+			AlternativeBackends:  ep.Backend.AlternativeBackends,
 		})
 	}
 	for _, ep := range UDPEndpoints {
@@ -884,7 +887,7 @@ func updateStreamConfiguration(TCPEndpoints []ingress.L4Service, UDPEndpoints []
 			service = &apiv1.Service{Spec: ep.Service.Spec}
 		}
 
-		key := fmt.Sprintf("udp-%v-%v-%v", ep.Backend.Namespace, ep.Backend.Name, ep.Backend.Port.String())
+		key := ep.Backend.NginxUpstreamKey()
 		streams = append(streams, ingress.Backend{
 			Name:      key,
 			Endpoints: ep.Endpoints,

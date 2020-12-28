@@ -715,6 +715,7 @@ stream {
     }
 
     lua_add_variable $proxy_upstream_name;
+    lua_add_variable $proxy_alternative_upstream_name;
 
     # specific protocol variable
     lua_add_variable $mqtt_protocol_name;
@@ -758,7 +759,7 @@ stream {
     }
 
     # TCP services
-    {{ range $tcpServer := .TCPBackends }}
+    {{ range $tcpServer := .TCPBackends }}{{ if not $tcpServer.Backend.NoServer }}
     server {
 
         {{ if ne $tcpServer.Backend.UpperLayerProtocol "TCP" }}
@@ -790,7 +791,7 @@ stream {
         proxy_protocol          on;
         {{ end }}
     }
-    {{ end }}
+    {{ end }}{{ end }}
 
     # UDP services
     {{ range $udpServer := .UDPBackends }}

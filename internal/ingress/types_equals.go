@@ -530,6 +530,15 @@ func (l4b1 *L4Backend) Equal(l4b2 *L4Backend) bool {
 	if l4b1.UpperLayerProtocol != l4b2.UpperLayerProtocol {
 		return false
 	}
+	if !sets.StringElementsMatch(l4b1.AlternativeBackends, l4b2.AlternativeBackends) {
+		return false
+	}
+	if !l4b1.TrafficShapingPolicy.Equal(l4b2.TrafficShapingPolicy) {
+		return false
+	}
+	if !l4b1.NoServer == l4b2.NoServer {
+		return false
+	}
 
 	return true
 }

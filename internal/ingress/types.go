@@ -17,9 +17,11 @@ limitations under the License.
 package ingress
 
 import (
+	"fmt"
 	apiv1 "k8s.io/api/core/v1"
 	networking "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"strings"
 
 	"k8s.io/ingress-nginx/internal/ingress/annotations"
 	"k8s.io/ingress-nginx/internal/ingress/annotations/auth"
@@ -373,6 +375,18 @@ type L4Backend struct {
 	UpstreamHashBy     UpstreamHashByConfig `json:"upstreamHashByConfig,omitempty"`
 	// +optional
 	ProxyProtocol ProxyProtocol `json:"proxyProtocol"`
+	// +optional
+	AlternativeBackends []string `json:"alternativeBackends,omitempty"`
+	// Denotes if a backend has no server. The backend instead shares a server with another backend and acts as an
+	// alternative backend.
+	// This can be used to share multiple upstreams in the sam nginx server block.
+	NoServer bool `json:"noServer"`
+	// +optional
+	TrafficShapingPolicy TrafficShapingPolicy `json:"trafficShapingPolicy,omitempty"`
+}
+
+func (l L4Backend) NginxUpstreamKey() string {
+	return fmt.Sprintf("%v-%v-%v-%v", strings.ToLower(string(l.Protocol)), l.Namespace, l.Name, l.Port.String())
 }
 
 // ProxyProtocol describes the proxy protocol configuration

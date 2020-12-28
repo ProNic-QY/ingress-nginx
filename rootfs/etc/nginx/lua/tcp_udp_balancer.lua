@@ -163,12 +163,82 @@ local function sync_backends()
   backends_last_synced_at = raw_backends_last_synced_at
 end
 
+local function route_to_alternative_balancer(balancer)
+  if not balancer.alternative_backends then
+    return false
+  end
+
+  local backend_name = balancer.alternative_backends[1]
+  if not backend_name then
+    ngx.log(ngx.ERR, "empty alternative backend")
+    return false
+  end
+
+  local alternative_balancer = balancers[backend_name]
+  if not alternative_balancer then
+    ngx.log(ngx.ERR, "no alternative balancer for backend: ",
+            tostring(backend_name))
+    return false
+  end
+
+  local traffic_shaping_policy =  alternative_balancer.traffic_shaping_policy
+  if not traffic_shaping_policy then
+    ngx.log(ngx.ERR, "traffic shaping policy is not set for balanacer ",
+            "of backend: ", tostring(backend_name))
+    return false
+  end
+
+  local header = ngx.var[traffic_shaping_policy.header]
+  if header then
+    if traffic_shaping_policy.headerValue
+            and #traffic_shaping_policy.headerValue > 0 then
+      if traffic_shaping_policy.headerValue == header then
+        return true
+      end
+    elseif traffic_shaping_policy.headerPattern
+            and #traffic_shaping_policy.headerPattern > 0 then
+      local m, err = ngx.re.match(header, traffic_shaping_policy.headerPattern)
+      if m then
+        return true
+      elseif  err then
+        ngx.log(ngx.ERR, "error when matching canary-by-header-pattern: '",
+                traffic_shaping_policy.headerPattern, "', error: ", err)
+        return false
+      end
+    elseif header == "always" then
+      return true
+    elseif header == "never" then
+      return false
+    end
+  end
+
+  if math.random(100) <= traffic_shaping_policy.weight then
+    return true
+  end
+
+  return false
+end
+
 local function get_balancer()
+  if ngx.ctx.balancer then
+    return ngx.ctx.balancer
+  end
+
   local backend_name = ngx.var.proxy_upstream_name
+
   local balancer = balancers[backend_name]
   if not balancer then
     return
   end
+
+  if route_to_alternative_balancer(balancer) then
+    local alternative_backend_name = balancer.alternative_backends[1]
+    ngx.var.proxy_alternative_upstream_name = alternative_backend_name
+
+    balancer = balancers[alternative_backend_name]
+  end
+
+  ngx.ctx.balancer = balancer
 
   return balancer
 end
